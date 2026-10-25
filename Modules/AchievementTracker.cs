@@ -58,7 +58,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private const string OmniOverlayCommand = "成就追踪悬浮窗";
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
+        Title = "成就追踪（测试）", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "读取游戏原生成就进度，在悬浮窗中显示自定义目标；自动同步当前角色的原生目标列表，并分别保存每个角色的配置。",
         Commands = new[]
         {

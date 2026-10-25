@@ -9,7 +9,7 @@
       "Version": "0.1.1",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/HideTargetCircle.cs",
-      "Sha256": "CC2964182A32EE6B808EACDB23D68BD18AA089AC1D390AD569FA2E2CAF6AD437"
+      "Sha256": "1C31F7342FE162D89A61947066335187A7726E06BE259E5AB2F8EB9C520AA0FB"
     },
     {
       "InternalName": "AchievementTracker",
@@ -19,7 +19,7 @@
       "Version": "0.5.12",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "E4C972DF0DAD35968A815AFAA3CC886E61E5B151755F44B28CDF4621B88594F9"
+      "Sha256": "4D9363B9A8F8019E457B99B954E67B4810683851D4A65A5337BBC3CC3F20CE9B"
     },
     {
       "InternalName": "SellOnClick",
@@ -29,7 +29,7 @@
       "Version": "0.2.5",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/QuickSell.cs",
-      "Sha256": "13457B1543FDADD34E75E19BF70B10FACF61DEC80AD5F0F0C3E49970CDB77A0C"
+      "Sha256": "82E5B1B838260B19611E826B9BB3DC3E1C0418E17763E6F7E4D3D4EDD1D950E5"
     },
     {
       "InternalName": "LimitBreakAdjustments",
@@ -39,7 +39,7 @@
       "Version": "0.1.2",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/LimitBreakAdjustments.cs",
-      "Sha256": "B5149098666A6C9ECD14F9CB006C936656B1042BE06DC21F3F4DBB5585FEFC59"
+      "Sha256": "FFCEA176FCF6BDC9BC661596B9E49782D9324F67137170D762B91033EB784C11"
     }
   ]
 }

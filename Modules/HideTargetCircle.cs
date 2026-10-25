@@ -25,7 +25,7 @@ public sealed unsafe class HideTargetCircle : ModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "隐藏目标圈", Author = "Yuzi", Category = ModuleCategory.Item,
+        Title = "隐藏目标圈（测试）", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "隐藏选中目标的目标圈，并可按拔出武器、战斗状态和战斗结束延迟控制显示。"
     };
     public override bool HasSettings => true;
