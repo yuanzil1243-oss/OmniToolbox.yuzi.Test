@@ -31,7 +31,15 @@ public sealed class ImeCandidateScaling : ModuleBase
     private Vector2 cachedPosition;
     private string cachedComposition = string.Empty;
     private (string Text, bool Supported)[] cachedCandidates = Array.Empty<(string Text, bool Supported)>();
-    private object? cachedViewport;
+    private ImGuiViewportPtr cachedViewport;
+    private object? imeService;
+    private object? interfaceManager;
+    private EventInfo? drawEvent;
+    private Delegate? originalDraw;
+    private Delegate? replacementDraw;
+    private string status = "未启用";
+    private long drawFrames;
+    private bool preview;
     private uint cachedCount, cachedSelection, cachedPageStart, cachedPageSize;
     private int cachedPartialFrom, cachedPartialTo;
     private bool hasCachedIme;
@@ -56,22 +64,49 @@ public sealed class ImeCandidateScaling : ModuleBase
             || CursorPositionField == null || NativeCandidatesField == null || AssociatedViewportField == null)
             throw new InvalidOperationException("当前 Dalamud 版本未提供兼容的 IME 候选状态。");
 
-        DalamudServices.Framework.Update += CaptureIme;
-        DalamudServices.PluginInterface.UiBuilder.Draw += DrawCandidates;
-        DalamudServices.PluginLog.Information("输入法候选栏缩放已启用，反射类型=" + ImeType.FullName);
+        imeService = GetImeService()
+            ?? throw new InvalidOperationException("无法解析 Dalamud IME 服务。");
+        interfaceManager = ImeType.GetField("interfaceManager", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(imeService)
+            ?? throw new InvalidOperationException("无法解析 IME 绘制事件源。");
+        drawEvent = interfaceManager.GetType().GetEvent("Draw", BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException("未找到 IME 绘制事件。");
+        var original = ImeType.GetMethod("Draw", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("未找到原候选栏绘制方法。");
+        originalDraw = Delegate.CreateDelegate(drawEvent.EventHandlerType!, imeService, original);
+        replacementDraw = Delegate.CreateDelegate(drawEvent.EventHandlerType!, this,
+            GetType().GetMethod(nameof(DrawCandidates), BindingFlags.Instance | BindingFlags.NonPublic)!);
+        drawEvent.RemoveEventHandler(interfaceManager, originalDraw);
+        try { drawEvent.AddEventHandler(interfaceManager, replacementDraw); }
+        catch
+        {
+            drawEvent.AddEventHandler(interfaceManager, originalDraw);
+            throw;
+        }
+        status = "绘制入口已替换，等待候选数据";
+        DalamudServices.PluginLog.Information("输入法候选栏 0.2.0：" + status);
     }
 
     protected override void OnDisable()
     {
-        DalamudServices.PluginInterface.UiBuilder.Draw -= DrawCandidates;
-        DalamudServices.Framework.Update -= CaptureIme;
-        RestoreDalamudViewport();
+        if (drawEvent != null && interfaceManager != null && replacementDraw != null)
+        {
+            drawEvent.RemoveEventHandler(interfaceManager, replacementDraw);
+            if (originalDraw != null) drawEvent.AddEventHandler(interfaceManager, originalDraw);
+        }
+        replacementDraw = null;
+        originalDraw = null;
+        imeService = null;
         hasCachedIme = false;
         captureLogged = false;
+        drawFrames = 0;
+        status = "未启用";
     }
 
     public override bool DrawSettings()
     {
+        ImGui.TextWrapped("本地待验证版 0.2.0 · 目标 Omni 1.1.8.2");
+        ImGui.TextWrapped(status + " · 绘制帧数：" + drawFrames);
+        ImGui.Checkbox("显示候选栏预览", ref preview);
         var changed = false;
         ImGui.SetNextItemWidth(-1);
         if (ImGui.SliderFloat("输入法候选栏缩放", ref config.Scale, MinScale, MaxScale, "%.2f 倍"))
@@ -106,27 +141,31 @@ public sealed class ImeCandidateScaling : ModuleBase
             changed = true;
         }
 
+        if (preview)
+        {
+            var pos = ImGui.GetCursorScreenPos() + new Vector2(12, 12);
+            DrawScaled(ImGui.GetWindowViewport(), pos, "ceshi",
+                new[] { ("测试", true), ("候选栏缩放", true), ("显示预览", true) },
+                3, 0, 0, 9, 0, 5, config.Scale);
+            ImGui.Dummy(new Vector2(1, 200 * config.Scale));
+        }
         if (changed) SaveConfig();
         return changed;
     }
 
-    private void CaptureIme(Dalamud.Plugin.Services.IFramework _)
+    private void CaptureIme()
     {
         try
         {
-            var ime = GetImeService();
-            if (ime == null) { hasCachedIme = false; return; }
-
-            var viewportObject = AssociatedViewportField!.GetValue(ime);
-            if (viewportObject == null) { hasCachedIme = false; return; }
-            var viewportType = viewportObject.GetType();
-            var handle = viewportType.GetProperty("Handle")?.GetValue(viewportObject);
-            if (handle is IntPtr pointer && pointer == IntPtr.Zero)
+            var ime = imeService ?? throw new InvalidOperationException("IME 服务不可用");
+            if (AssociatedViewportField!.GetValue(ime) is not ImGuiViewportPtr viewport
+                || viewport.Equals(default(ImGuiViewportPtr)))
             {
-                if (cachedViewport == null) { hasCachedIme = false; return; }
-                viewportObject = cachedViewport;
+                hasCachedIme = false;
+                status = "等待 ImGui 输入焦点；当前没有关联视口";
+                return;
             }
-
+            cachedViewport = viewport;
             cachedPosition = CursorPositionField!.GetValue(ime) is Vector2 cursor ? cursor : Vector2.Zero;
             cachedComposition = CompositionField!.GetValue(ime) as string ?? string.Empty;
             var candidates = CandidateStringsField!.GetValue(ime) as IEnumerable;
@@ -146,56 +185,50 @@ public sealed class ImeCandidateScaling : ModuleBase
             hasCachedIme = cachedCandidates.Length > 0 || hasComposition;
             if (hasCachedIme)
             {
-                cachedViewport = viewportObject;
-                AssociatedViewportField.SetValue(ime, Activator.CreateInstance(AssociatedViewportField.FieldType));
+                status = "已读取候选：" + cachedCandidates.Length;
                 if (!captureLogged)
                 {
                     captureLogged = true;
                     DalamudServices.PluginLog.Information("输入法候选栏已捕获：候选数=" + cachedCandidates.Length + "，倍率=" + config.Scale.ToString("F2"));
                 }
             }
-            else if (cachedViewport != null)
-            {
-                AssociatedViewportField.SetValue(ime, cachedViewport);
-                cachedViewport = null;
-            }
+
         }
         catch (Exception ex)
         {
             hasCachedIme = false;
-            DalamudServices.PluginLog.Error(ex, "接管输入法候选栏失败");
+            throw new InvalidOperationException("读取候选状态失败", ex);
         }
-    }
-
-    private void RestoreDalamudViewport()
-    {
-        if (cachedViewport == null || AssociatedViewportField == null) return;
-        try
-        {
-            var ime = GetImeService();
-            if (ime != null) AssociatedViewportField.SetValue(ime, cachedViewport);
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "恢复原输入法候选栏失败"); }
-        cachedViewport = null;
     }
 
     private void DrawCandidates()
     {
-        // Framework.Update and Dalamud's internal IME draw event are not guaranteed
-        // to run in the same order. Capture again here so the next frame is owned.
-        CaptureIme(default!);
-        if (!hasCachedIme) return;
-        var hasComposition = cachedCandidates.Length > 0
-            || cachedPartialFrom != 0 || cachedPartialTo != cachedComposition.Length;
-        if (cachedCandidates.Length == 0 && !hasComposition) return;
-        DrawScaled(cachedPosition, cachedComposition, cachedCandidates, cachedCount, cachedSelection,
-            cachedPageStart, cachedPageSize, cachedPartialFrom, cachedPartialTo, config.Scale);
+        drawFrames++;
+        try
+        {
+            CaptureIme();
+            if (!hasCachedIme || config.Scale == 1f)
+            {
+                originalDraw?.DynamicInvoke();
+                return;
+            }
+            DrawScaled(cachedViewport, cachedPosition, cachedComposition, cachedCandidates, cachedCount,
+                cachedSelection, cachedPageStart, cachedPageSize, cachedPartialFrom, cachedPartialTo, config.Scale);
+        }
+        catch (Exception ex)
+        {
+            status = "自绘失败，已回退原候选栏：" + ex.Message;
+            if (drawFrames == 1 || captureLogged)
+                DalamudServices.PluginLog.Error(ex, status);
+            captureLogged = false;
+            try { originalDraw?.DynamicInvoke(); }
+            catch (Exception fallback) { DalamudServices.PluginLog.Error(fallback, "原候选栏绘制失败"); }
+        }
     }
 
-    private static void DrawScaled(Vector2 anchor, string composition, (string Text, bool Supported)[] candidates,
+    private static void DrawScaled(ImGuiViewportPtr viewport, Vector2 anchor, string composition, (string Text, bool Supported)[] candidates,
         uint count, uint selection, uint pageStart, uint pageSize, int partialFrom, int partialTo, float scale)
     {
-        var viewport = ImGui.GetMainViewport();
         var workMin = viewport.WorkPos;
         var workMax = workMin + viewport.WorkSize;
         var style = ImGui.GetStyle();
@@ -302,10 +335,10 @@ public sealed class ImeCandidateScaling : ModuleBase
     private static object? GetImeService()
     {
         if (ImeType == null) return null;
-        var resolver = typeof(Dalamud.Plugin.IDalamudPluginInterface).Assembly.GetType("Dalamud.ServiceResolver");
-        var get = resolver?.GetMethod("Get", BindingFlags.Static | BindingFlags.Public);
-        if (get == null) return null;
-        return get.Invoke(null, new object[] { ImeType });
+        var service = ImeType.Assembly.GetType("Dalamud.Service`1")?.MakeGenericType(ImeType);
+        var get = service?.GetMethod("GetNullable", BindingFlags.Static | BindingFlags.Public);
+        if (get == null) throw new InvalidOperationException("未找到 Dalamud 服务访问器");
+        return get.Invoke(null, get.GetParameters().Select(_ => Type.Missing).ToArray());
     }
 
     private static float Clamp(float value) => float.IsFinite(value) ? Math.Clamp(value, MinScale, MaxScale) : MinScale;
