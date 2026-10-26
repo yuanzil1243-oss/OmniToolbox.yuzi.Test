@@ -46,10 +46,10 @@
       "Name": "输入法候选栏缩放（测试）",
       "Author": "Yuzi",
       "Description": "调整游戏内输入法候选栏的自绘显示倍率，沿用输入光标定位和屏幕边界处理。",
-      "Version": "0.1.0",
+      "Version": "0.1.1",
       "MinimumOmniVersion": "1.1.8.1",
       "File": "Modules/ImeCandidateScaling.cs",
-      "Sha256": "E7A2A92986627118B4B3974178DBAB8B7152AA2C3829FE8F9B9E6DCB666F20AE"
+      "Sha256": "30BC8ACBDADF4A11B2EBCE4F6F3BFB9E06FD8FE6AE2DBB44063CBE6D76A8820F"
     }
   ]
 }

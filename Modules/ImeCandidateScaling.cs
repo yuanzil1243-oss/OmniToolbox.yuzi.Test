@@ -6,7 +6,6 @@ using System.Numerics;
 using System.Reflection;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
-using HarmonyLib;
 using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
@@ -28,10 +27,14 @@ public sealed class ImeCandidateScaling : ModuleBase
     private static readonly FieldInfo? PartialFromField = ImeType?.GetField("partialConversionFrom", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly FieldInfo? PartialToField = ImeType?.GetField("partialConversionTo", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly FieldInfo? AssociatedViewportField = ImeType?.GetField("associatedViewport", BindingFlags.Instance | BindingFlags.NonPublic);
-    private static readonly Harmony Harmony = new("Yuzi.Omni.ImeCandidateScaling");
-    private static ImeCandidateScaling? active;
-
     private readonly ImeCandidateScalingConfig config = new();
+    private Vector2 cachedPosition;
+    private string cachedComposition = string.Empty;
+    private (string Text, bool Supported)[] cachedCandidates = Array.Empty<(string Text, bool Supported)>();
+    private object? cachedViewport;
+    private uint cachedCount, cachedSelection, cachedPageStart, cachedPageSize;
+    private int cachedPartialFrom, cachedPartialTo;
+    private bool hasCachedIme;
     private string scaleInput = "1.00";
 
     public override ModuleInfo Info { get; } = new()
@@ -52,18 +55,16 @@ public sealed class ImeCandidateScaling : ModuleBase
             || CursorPositionField == null || NativeCandidatesField == null || AssociatedViewportField == null)
             throw new InvalidOperationException("当前 Dalamud 版本未提供兼容的 IME 候选状态。");
 
-        var draw = ImeType.GetMethod("Draw", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(ImeType.FullName, "Draw");
-        active = this;
-        Harmony.Patch(draw, prefix: new HarmonyMethod(typeof(ImeCandidateScaling), nameof(SkipDalamudDraw)));
+        DalamudServices.Framework.Update += CaptureIme;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawCandidates;
     }
 
     protected override void OnDisable()
     {
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawCandidates;
-        Harmony.UnpatchAll(Harmony.Id);
-        active = null;
+        DalamudServices.Framework.Update -= CaptureIme;
+        RestoreDalamudViewport();
+        hasCachedIme = false;
     }
 
     public override bool DrawSettings()
@@ -106,44 +107,78 @@ public sealed class ImeCandidateScaling : ModuleBase
         return changed;
     }
 
-    private static bool SkipDalamudDraw() => active != null;
-
-    private void DrawCandidates()
+    private void CaptureIme(Dalamud.Plugin.Services.IFramework _)
     {
         try
         {
             var ime = GetImeService();
-            if (ime == null) return;
+            if (ime == null) { hasCachedIme = false; return; }
 
             var viewportObject = AssociatedViewportField!.GetValue(ime);
-            if (viewportObject == null) return;
+            if (viewportObject == null) { hasCachedIme = false; return; }
             var viewportType = viewportObject.GetType();
             var handle = viewportType.GetProperty("Handle")?.GetValue(viewportObject);
-            if (handle is IntPtr pointer && pointer == IntPtr.Zero) return;
+            if (handle is IntPtr pointer && pointer == IntPtr.Zero)
+            {
+                if (cachedViewport == null) { hasCachedIme = false; return; }
+                viewportObject = cachedViewport;
+            }
 
-            var position = CursorPositionField!.GetValue(ime) is Vector2 cursor ? cursor : Vector2.Zero;
-            var composition = CompositionField!.GetValue(ime) as string ?? string.Empty;
+            cachedPosition = CursorPositionField!.GetValue(ime) is Vector2 cursor ? cursor : Vector2.Zero;
+            cachedComposition = CompositionField!.GetValue(ime) as string ?? string.Empty;
             var candidates = CandidateStringsField!.GetValue(ime) as IEnumerable;
-            var strings = candidates?.Cast<object>().Select(ReadCandidate).ToArray() ?? Array.Empty<(string Text, bool Supported)>();
+            cachedCandidates = candidates?.Cast<object>().Select(ReadCandidate).ToArray()
+                ?? Array.Empty<(string Text, bool Supported)>();
             var native = NativeCandidatesField!.GetValue(ime);
-            if (native == null) return;
+            if (native == null) { hasCachedIme = false; return; }
 
-            var count = ReadUInt(native, "dwCount");
-            var selection = ReadUInt(native, "dwSelection");
-            var pageStart = ReadUInt(native, "dwPageStart");
-            var pageSize = Math.Max(1u, ReadUInt(native, "dwPageSize"));
-            var partialFrom = ReadInt(PartialFromField, ime);
-            var partialTo = ReadInt(PartialToField, ime);
-            var hasComposition = strings.Length > 0 || partialFrom != 0 || partialTo != composition.Length;
-            if (strings.Length == 0 && !hasComposition) return;
-
-            DrawScaled(position, composition, strings, count, selection, pageStart, pageSize,
-                partialFrom, partialTo, config.Scale);
+            cachedCount = ReadUInt(native, "dwCount");
+            cachedSelection = ReadUInt(native, "dwSelection");
+            cachedPageStart = ReadUInt(native, "dwPageStart");
+            cachedPageSize = Math.Max(1u, ReadUInt(native, "dwPageSize"));
+            cachedPartialFrom = ReadInt(PartialFromField, ime);
+            cachedPartialTo = ReadInt(PartialToField, ime);
+            var hasComposition = cachedCandidates.Length > 0
+                || cachedPartialFrom != 0 || cachedPartialTo != cachedComposition.Length;
+            hasCachedIme = cachedCandidates.Length > 0 || hasComposition;
+            if (hasCachedIme)
+            {
+                cachedViewport = viewportObject;
+                AssociatedViewportField.SetValue(ime, Activator.CreateInstance(AssociatedViewportField.FieldType));
+            }
+            else if (cachedViewport != null)
+            {
+                AssociatedViewportField.SetValue(ime, cachedViewport);
+                cachedViewport = null;
+            }
         }
         catch (Exception ex)
         {
-            DalamudServices.PluginLog.Error(ex, "绘制输入法候选栏失败");
+            hasCachedIme = false;
+            DalamudServices.PluginLog.Error(ex, "接管输入法候选栏失败");
         }
+    }
+
+    private void RestoreDalamudViewport()
+    {
+        if (cachedViewport == null || AssociatedViewportField == null) return;
+        try
+        {
+            var ime = GetImeService();
+            if (ime != null) AssociatedViewportField.SetValue(ime, cachedViewport);
+        }
+        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "恢复原输入法候选栏失败"); }
+        cachedViewport = null;
+    }
+
+    private void DrawCandidates()
+    {
+        if (!hasCachedIme) return;
+        var hasComposition = cachedCandidates.Length > 0
+            || cachedPartialFrom != 0 || cachedPartialTo != cachedComposition.Length;
+        if (cachedCandidates.Length == 0 && !hasComposition) return;
+        DrawScaled(cachedPosition, cachedComposition, cachedCandidates, cachedCount, cachedSelection,
+            cachedPageStart, cachedPageSize, cachedPartialFrom, cachedPartialTo, config.Scale);
     }
 
     private static void DrawScaled(Vector2 anchor, string composition, (string Text, bool Supported)[] candidates,
