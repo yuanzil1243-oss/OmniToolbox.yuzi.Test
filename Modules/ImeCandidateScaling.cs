@@ -38,8 +38,6 @@ public sealed class ImeCandidateScaling : ModuleBase
     private Delegate? originalDraw;
     private Delegate? replacementDraw;
     private string status = "未启用";
-    private long drawFrames;
-    private bool preview;
     private uint cachedCount, cachedSelection, cachedPageStart, cachedPageSize;
     private int cachedPartialFrom, cachedPartialTo;
     private bool hasCachedIme;
@@ -98,16 +96,14 @@ public sealed class ImeCandidateScaling : ModuleBase
         imeService = null;
         hasCachedIme = false;
         captureLogged = false;
-        drawFrames = 0;
         status = "未启用";
     }
 
     public override bool DrawSettings()
     {
-        ImGui.TextWrapped("Dalamud 插件候选栏缩放 · 预览");
-        ImGui.TextWrapped(status + " · 绘制帧数：" + drawFrames);
+        ImGui.TextWrapped("Dalamud 插件候选栏缩放");
+        ImGui.TextWrapped(status);
         ImGui.TextWrapped("仅作用于 Dalamud 插件 ImGui 输入框，不作用于游戏聊天框。");
-        ImGui.Checkbox("显示候选栏预览", ref preview);
         var changed = false;
         ImGui.SetNextItemWidth(-1);
         if (ImGui.SliderFloat("输入法候选栏缩放", ref config.Scale, MinScale, MaxScale, "%.2f 倍"))
@@ -142,14 +138,6 @@ public sealed class ImeCandidateScaling : ModuleBase
             changed = true;
         }
 
-        if (preview)
-        {
-            var pos = ImGui.GetCursorScreenPos() + new Vector2(12, 12);
-            DrawScaled(ImGui.GetWindowViewport(), pos, "Input",
-                new[] { ("Candidate one", true), ("Candidate two", true), ("Candidate three", true) },
-                3, 0, 0, 9, 0, 5, config.Scale);
-            ImGui.Dummy(new Vector2(1, 200 * config.Scale));
-        }
         if (changed) SaveConfig();
         return changed;
     }
@@ -204,7 +192,6 @@ public sealed class ImeCandidateScaling : ModuleBase
 
     private void DrawCandidates()
     {
-        drawFrames++;
         try
         {
             CaptureIme();
@@ -219,7 +206,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         catch (Exception ex)
         {
             status = "自绘失败，已回退原候选栏：" + ex.Message;
-            if (drawFrames == 1 || captureLogged)
+            if (captureLogged)
                 DalamudServices.PluginLog.Error(ex, status);
             captureLogged = false;
             try { originalDraw?.DynamicInvoke(); }
@@ -248,12 +235,12 @@ public sealed class ImeCandidateScaling : ModuleBase
         maxTextWidth = Math.Max(maxTextWidth, ImGui.CalcTextSize(composition).X) * scale;
         maxTextWidth = Math.Max(1, Math.Min(maxTextWidth, viewport.WorkSize.X - padding.X * 2));
         var measureWidth = maxTextWidth / scale;
-        var heights = candidates.Select((candidate, index) => ImGui.CalcTextSize(
-            $"{index + 1}. {candidate.Text}{(candidate.Supported ? string.Empty : " (x)")}", false, measureWidth).Y * scale).ToArray();
+        // Candidate entries are single-line in Dalamud. Wrapping special glyphs
+        // causes the next entry to overlap when their measured width differs.
+        var heights = candidates.Select(_ => lineHeight).ToArray();
         var compositionHeight = hasPartial(composition, partialFrom, partialTo)
             ? ImGui.CalcTextSize(composition, false, measureWidth).Y * scale : 0;
-        var pageHeight = candidates.Length > 0
-            ? ImGui.CalcTextSize(pageText, false, measureWidth).Y * scale : 0;
+        var pageHeight = candidates.Length > 0 ? lineHeight : 0;
         var contentHeight = heights.Sum() + compositionHeight + pageHeight
             + Math.Max(0, heights.Length + (compositionHeight > 0 ? 1 : 0) + (pageHeight > 0 ? 1 : 0) - 1) * lineSpacing
             + (candidates.Length > 0 ? lineSpacing : 0);
@@ -285,8 +272,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         for (var i = 0; i < candidates.Length; i++)
         {
             var label = $"{i + 1}. {candidates[i].Text}{(candidates[i].Supported ? string.Empty : " (x)")}";
-            draw.AddText(font, fontSize, cursor, i == selection % pageSize ? selected : text, label,
-                maxTextWidth);
+            draw.AddText(font, fontSize, cursor, i == selection % pageSize ? selected : text, label);
             cursor.Y += heights[i] + lineSpacing;
         }
 
@@ -294,7 +280,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         {
             draw.AddLine(cursor, cursor + new Vector2(maxTextWidth, 0), ImGui.GetColorU32(ImGuiCol.Separator));
             cursor.Y += lineSpacing;
-            draw.AddText(font, fontSize, cursor, text, pageText, maxTextWidth);
+            draw.AddText(font, fontSize, cursor, text, pageText);
             cursor.Y += pageHeight + lineSpacing;
         }
 

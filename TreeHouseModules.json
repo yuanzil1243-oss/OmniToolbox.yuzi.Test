@@ -46,10 +46,10 @@
       "Name": "Dalamud 插件候选栏缩放（测试）",
       "Author": "Yuzi",
       "Description": "调整 Dalamud 插件 ImGui 输入框候选栏的显示倍率。",
-      "Version": "0.3.0",
+      "Version": "0.3.1",
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/ImeCandidateScaling.cs",
-      "Sha256": "3E3931E4E44322047FC8D948C3175DCDF8620761143C0E434FF08B0001DE7AC3"
+      "Sha256": "EA2D48BC0AD5B7F4BB6B5D02149BA119CA1F72B8CDBEE06A46B1DC48D118C4C6"
     }
   ]
 }
