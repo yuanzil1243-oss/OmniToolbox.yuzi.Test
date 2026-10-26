@@ -40,6 +40,16 @@
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/LimitBreakAdjustments.cs",
       "Sha256": "B5149098666A6C9ECD14F9CB006C936656B1042BE06DC21F3F4DBB5585FEFC59"
+    },
+    {
+      "InternalName": "ImeCandidateScaling",
+      "Name": "输入法候选栏缩放（测试）",
+      "Author": "Yuzi",
+      "Description": "调整游戏内输入法候选栏的自绘显示倍率，沿用输入光标定位和屏幕边界处理。",
+      "Version": "0.1.0",
+      "MinimumOmniVersion": "1.1.8.1",
+      "File": "Modules/ImeCandidateScaling.cs",
+      "Sha256": "E7A2A92986627118B4B3974178DBAB8B7152AA2C3829FE8F9B9E6DCB666F20AE"
     }
   ]
 }
