@@ -55,11 +55,11 @@
       "InternalName": "KeyRepeater",
       "Name": "按键连点（测试）",
       "Author": "Yuzi",
-      "Description": "按住配置的按键或快捷键组合时，持续发送对应输入。",
-      "Version": "0.1.0",
+      "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。",
+      "Version": "0.2.0",
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/KeyRepeater.cs",
-      "Sha256": "228721EF9F0AE91EBD1BC4997274B51A543B4E9470647FFD73A39157562B324B"
+      "Sha256": "6D89D81F4F65C757E762672D5F78A9C7D57BED22B870D64DE3C21BE881C29810"
     }
   ]
 }
