@@ -42,16 +42,6 @@
       "Sha256": "B5149098666A6C9ECD14F9CB006C936656B1042BE06DC21F3F4DBB5585FEFC59"
     },
     {
-      "InternalName": "ImeCandidateScaling",
-      "Name": "Dalamud 插件候选栏缩放（测试）",
-      "Author": "Yuzi",
-      "Description": "调整 Dalamud 插件 ImGui 输入框候选栏的显示倍率。",
-      "Version": "0.3.1",
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/ImeCandidateScaling.cs",
-      "Sha256": "EA2D48BC0AD5B7F4BB6B5D02149BA119CA1F72B8CDBEE06A46B1DC48D118C4C6"
-    },
-    {
       "InternalName": "KeyRepeater",
       "Name": "按键连点（测试）",
       "Author": "Yuzi",
