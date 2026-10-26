@@ -35,6 +35,7 @@ public sealed class ImeCandidateScaling : ModuleBase
     private uint cachedCount, cachedSelection, cachedPageStart, cachedPageSize;
     private int cachedPartialFrom, cachedPartialTo;
     private bool hasCachedIme;
+    private bool captureLogged;
     private string scaleInput = "1.00";
 
     public override ModuleInfo Info { get; } = new()
@@ -57,6 +58,7 @@ public sealed class ImeCandidateScaling : ModuleBase
 
         DalamudServices.Framework.Update += CaptureIme;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawCandidates;
+        DalamudServices.PluginLog.Information("输入法候选栏缩放已启用，反射类型=" + ImeType.FullName);
     }
 
     protected override void OnDisable()
@@ -65,6 +67,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         DalamudServices.Framework.Update -= CaptureIme;
         RestoreDalamudViewport();
         hasCachedIme = false;
+        captureLogged = false;
     }
 
     public override bool DrawSettings()
@@ -145,6 +148,11 @@ public sealed class ImeCandidateScaling : ModuleBase
             {
                 cachedViewport = viewportObject;
                 AssociatedViewportField.SetValue(ime, Activator.CreateInstance(AssociatedViewportField.FieldType));
+                if (!captureLogged)
+                {
+                    captureLogged = true;
+                    DalamudServices.PluginLog.Information("输入法候选栏已捕获：候选数=" + cachedCandidates.Length + "，倍率=" + config.Scale.ToString("F2"));
+                }
             }
             else if (cachedViewport != null)
             {
@@ -173,6 +181,9 @@ public sealed class ImeCandidateScaling : ModuleBase
 
     private void DrawCandidates()
     {
+        // Framework.Update and Dalamud's internal IME draw event are not guaranteed
+        // to run in the same order. Capture again here so the next frame is owned.
+        CaptureIme(default!);
         if (!hasCachedIme) return;
         var hasComposition = cachedCandidates.Length > 0
             || cachedPartialFrom != 0 || cachedPartialTo != cachedComposition.Length;

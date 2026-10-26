@@ -6,7 +6,7 @@
       "Name": "隐藏目标圈（测试）",
       "Author": "Yuzi",
       "Description": "默认隐藏选中目标的目标圈，可在拔出武器或战斗状态下显示，并设置战斗结束后的延迟隐藏时间。",
-      "Version": "0.1.1",
+      "Version": "0.1.2",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/HideTargetCircle.cs",
       "Sha256": "CC2964182A32EE6B808EACDB23D68BD18AA089AC1D390AD569FA2E2CAF6AD437"
@@ -46,10 +46,10 @@
       "Name": "输入法候选栏缩放（测试）",
       "Author": "Yuzi",
       "Description": "调整游戏内输入法候选栏的自绘显示倍率，沿用输入光标定位和屏幕边界处理。",
-      "Version": "0.1.1",
+      "Version": "0.1.2",
       "MinimumOmniVersion": "1.1.8.1",
       "File": "Modules/ImeCandidateScaling.cs",
-      "Sha256": "30BC8ACBDADF4A11B2EBCE4F6F3BFB9E06FD8FE6AE2DBB44063CBE6D76A8820F"
+      "Sha256": "A17E50C5674573F6DBDB89600230AC8D139CD8D7CAEC458AEA0B608DF94CE37A"
     }
   ]
 }
