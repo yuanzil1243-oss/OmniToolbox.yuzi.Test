@@ -43,6 +43,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly Dictionary<int, string> territorySearch = new();
     private AchievementGoal draftGoal = new();
     private bool draftExpanded = true;
+    private const long ProgressRequestSpacingMs = 500;
+    private const long ProgressRefreshIntervalMs = 5000;
+    private const long ProgressRequestTimeoutMs = 5000;
+    private const long TerritoryRefreshDelayMs = 1500;
+    private long nextProgressRequestAt;
+    private long nextProgressRefreshAt;
+    private long progressRequestDeadline;
+    private long territoryRefreshAt;
+    private uint progressRequestInFlight;
+    private bool territoryRefreshPending;
     private ulong activeContentId;
     private bool nativeWatchlistImported;
     private long nativeWatchlistImportAfter;
@@ -93,6 +103,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
         EnsureCharacterProfile();
         if (activeContentId == 0) return;
         config.ShowOverlay = !config.ShowOverlay;
+        if (config.ShowOverlay)
+        {
+            QueueProgressRequests();
+            if (territoryRefreshPending)
+                territoryRefreshAt = Environment.TickCount64;
+        }
+        else
+        {
+            requests.Clear();
+        }
         SaveConfig();
     }
 
@@ -120,6 +140,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         RestoreOmniCommand();
         progress.Clear();
         requests.Clear();
+        nextProgressRequestAt = 0;
+        nextProgressRefreshAt = 0;
+        progressRequestDeadline = 0;
+        territoryRefreshAt = 0;
+        progressRequestInFlight = 0;
+        territoryRefreshPending = false;
         activeContentId = 0;
         nativeWatchlistImported = false;
         nextNativeWatchlistPoll = 0;
@@ -406,7 +432,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (ImGui.Button("重新读取进度", new System.Numerics.Vector2(0, controlHeight)))
             {
                 RefreshNativeWatchlistAndProgress();
-                QueueProgressRequests();
                 changed = true;
             }
             ImGui.SameLine();
@@ -519,8 +544,24 @@ public sealed unsafe class AchievementTracker : ModuleBase
             return;
         }
 
-        ImGui.TextWrapped(row.Value.Description.ToString());
+        var description = row.Value.Description.ToString();
+        var prerequisiteIds = GetAchievementPrerequisiteIds(row.Value);
+        if (IsAchievementPrerequisiteDescription(description) && prerequisiteIds.Count > 0)
+        {
+            DrawAchievementPrerequisiteList(prerequisiteIds);
+            return;
+        }
+
         var declaredTarget = GetDeclaredAchievementTarget(row.Value);
+        var hasSingleCompletionTarget = declaredTarget == 1;
+        if (hasSingleCompletionTarget)
+        {
+            DrawWrappedOverlayText($"达成条件：{description}");
+            DrawAchievementStatus(IsAchievementComplete((uint)goal.Id));
+            return;
+        }
+
+        ImGui.TextWrapped(description);
         if (!progress.TryGetValue((uint)goal.Id, out var state))
         {
             ImGui.TextDisabled(declaredTarget > 0
@@ -910,8 +951,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
             var hasPrerequisiteList = row.HasValue
                 && IsAchievementPrerequisiteDescription(description)
                 && prerequisiteIds.Count > 0;
-            var showCondition = row.HasValue && (hasPrerequisiteList || (hasProgressCounter && state.Max == 1));
-            var completed = hasProgressCounter && state.Current >= state.Max;
+            var hasSingleCompletionTarget = row.HasValue
+                && (declaredTarget == 1 || (hasProgressCounter && state.Max == 1));
+            var showCondition = row.HasValue && (hasPrerequisiteList || hasSingleCompletionTarget);
+            var completed = hasSingleCompletionTarget
+                ? IsAchievementComplete((uint)goal.Id)
+                : hasProgressCounter && state.Current >= state.Max;
             if (!goal.ShowCompleted && completed) continue;
             ImGui.Separator();
             ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? $"无效成就 ID: {goal.Id}" : goal.Name));
@@ -927,7 +972,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (showCondition)
                 DrawWrappedOverlayText($"达成条件：{description}");
 
-            if (hasProgressCounter && state.Max == 1)
+            if (hasSingleCompletionTarget)
             {
                 DrawAchievementStatus(completed);
                 continue;
@@ -1012,6 +1057,14 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
     }
 
+    private static bool IsAchievementComplete(uint achievementId)
+    {
+        var achievement = FfxivAchievement.Instance();
+        return achievement != null
+            && achievement->State == FfxivAchievement.AchievementState.Loaded
+            && achievement->IsComplete((int)achievementId);
+    }
+
     private static void DrawAchievementStatus(bool completed)
         => ImGui.TextColored(
             completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1),
@@ -1027,11 +1080,27 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private void QueueProgressRequests()
     {
         requests.Clear();
-        var ids = config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id);
-        if (draftGoal.Enabled && draftGoal.Id > 0)
+        var ids = config.Goals
+            .Where(x => x.Enabled && x.Id > 0 && NeedsProgressRequest((uint)x.Id))
+            .Select(x => (uint)x.Id);
+        if (draftGoal.Enabled && draftGoal.Id > 0 && NeedsProgressRequest((uint)draftGoal.Id))
             ids = ids.Append((uint)draftGoal.Id);
         foreach (var id in ids.Distinct())
             requests.Enqueue(id);
+        if (config.ShowOverlay)
+            nextProgressRefreshAt = Environment.TickCount64 + ProgressRefreshIntervalMs;
+    }
+
+    private static bool NeedsProgressRequest(uint achievementId)
+    {
+        var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>()
+            .GetRowOrDefault(achievementId);
+        if (!row.HasValue) return true;
+
+        var description = row.Value.Description.ToString();
+        return row.Value.Type != 2
+            && !IsAchievementPrerequisiteDescription(description)
+            && GetDeclaredAchievementTarget(row.Value) != 1;
     }
 
     private void RefreshNativeWatchlistAndProgress()
@@ -1041,7 +1110,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
         nativeWatchlistImportAfter = Environment.TickCount64;
         nextNativeWatchlistPoll = 0;
         nativeWatchlistSnapshot = "";
+        progressRequestInFlight = 0;
+        progressRequestDeadline = 0;
         QueueProgressRequests();
+        nextProgressRefreshAt = Environment.TickCount64 + ProgressRefreshIntervalMs;
         DalamudServices.PluginLog.Information("成就追踪：手动刷新已排队，将重新读取原生目标列表和成就进度");
     }
 
@@ -1173,18 +1245,73 @@ public sealed unsafe class AchievementTracker : ModuleBase
             progress[achievement->ProgressAchievementId] = new(achievement->ProgressCurrent, achievement->ProgressMax);
         }
 
-        if (!DService.Instance().ClientState.IsLoggedIn || requests.Count == 0 || achievement == null) return;
+        if (!config.ShowOverlay || !DService.Instance().ClientState.IsLoggedIn || achievement == null)
+            return;
+
+        if (territoryRefreshPending && now >= territoryRefreshAt)
+        {
+            territoryRefreshPending = false;
+            QueueProgressRequests();
+            nextProgressRefreshAt = now + ProgressRefreshIntervalMs;
+            DalamudServices.PluginLog.Debug("成就追踪：过图数据稳定，开始异步刷新成就进度");
+        }
+
+        if (now >= nextProgressRefreshAt && progressRequestInFlight == 0 && requests.Count == 0)
+        {
+            QueueProgressRequests();
+            nextProgressRefreshAt = now + ProgressRefreshIntervalMs;
+        }
+
+        if (progressRequestInFlight != 0)
+        {
+            if (now >= progressRequestDeadline)
+            {
+                requests.Enqueue(progressRequestInFlight);
+                progressRequestInFlight = 0;
+                progressRequestDeadline = 0;
+                nextProgressRequestAt = now + ProgressRequestSpacingMs;
+                DalamudServices.PluginLog.Debug("成就追踪：成就进度请求超时，将稍后重试");
+            }
+            return;
+        }
+
+        if (requests.Count == 0 || now < nextProgressRequestAt)
+            return;
+
         var id = requests.Dequeue();
-        achievement->RequestAchievementProgress(id);
+        progressRequestInFlight = id;
+        progressRequestDeadline = now + ProgressRequestTimeoutMs;
+        try
+        {
+            achievement->RequestAchievementProgress(id);
+        }
+        catch (Exception exception)
+        {
+            progressRequestInFlight = 0;
+            progressRequestDeadline = 0;
+            nextProgressRequestAt = now + ProgressRequestSpacingMs;
+            DalamudServices.PluginLog.Error(exception, $"成就追踪：请求成就进度失败，ID={id}");
+        }
     }
 
     private void ReceiveAchievementProgress(FfxivAchievement* achievement, uint id, uint current, uint max)
     {
         progressHook!.Original(achievement, id, current, max);
         progress[id] = new(current, max);
+        if (progressRequestInFlight == id)
+        {
+            progressRequestInFlight = 0;
+            progressRequestDeadline = 0;
+            nextProgressRequestAt = Environment.TickCount64 + ProgressRequestSpacingMs;
+        }
     }
 
-    private void OnTerritoryChanged(uint territoryType) => UpdateTerritory();
+    private void OnTerritoryChanged(uint territoryType)
+    {
+        UpdateTerritory();
+        territoryRefreshPending = true;
+        territoryRefreshAt = Environment.TickCount64 + TerritoryRefreshDelayMs;
+    }
 
     private void UpdateTerritory()
     {
@@ -1210,6 +1337,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         ResetCharacterConfig();
         progress.Clear();
         requests.Clear();
+        progressRequestInFlight = 0;
+        progressRequestDeadline = 0;
+        nextProgressRequestAt = 0;
+        nextProgressRefreshAt = 0;
+        territoryRefreshAt = 0;
+        territoryRefreshPending = false;
         achievementSearch.Clear();
         territorySearch.Clear();
         draftGoal = new AchievementGoal();

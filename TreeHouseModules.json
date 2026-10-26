@@ -15,11 +15,11 @@
       "InternalName": "AchievementTracker",
       "Name": "成就追踪（测试）",
       "Author": "Yuzi",
-      "Description": "读取游戏原生成就进度并显示不限数量的目标；有计数器的成就显示进度，无计数器的成就显示达成条件；按角色保存并同步原生目标列表，支持基于游戏数据和离线资料的区域预设。",
-      "Version": "0.5.12",
+      "Description": "读取游戏原生成就进度并显示不限数量的目标；有计数器的成就显示进度，无计数器的成就显示达成条件；悬浮窗显示时低频刷新，过图后异步刷新；按角色保存并同步原生目标列表，支持基于游戏数据和离线资料的区域预设。",
+      "Version": "0.5.13",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "E4C972DF0DAD35968A815AFAA3CC886E61E5B151755F44B28CDF4621B88594F9"
+      "Sha256": "418394EE039031DDC2F5186A117046BB3E32A7580EE38B49F11B3824259A2122"
     },
     {
       "InternalName": "SellOnClick",
