@@ -48,10 +48,10 @@ public sealed class ImeCandidateScaling : ModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "输入法候选栏缩放",
+        Title = "Dalamud 插件候选栏缩放",
         Author = "Yuzi",
         Category = ModuleCategory.Item,
-        Description = "独立调整游戏内输入法候选栏的显示倍率。"
+        Description = "调整 Dalamud 插件 ImGui 输入框候选栏的显示倍率。"
     };
 
     public override bool HasSettings => true;
@@ -83,7 +83,7 @@ public sealed class ImeCandidateScaling : ModuleBase
             throw;
         }
         status = "绘制入口已替换，等待候选数据";
-        DalamudServices.PluginLog.Information("输入法候选栏 0.2.0：" + status);
+        DalamudServices.PluginLog.Information("输入法候选栏 0.2.1：" + status);
     }
 
     protected override void OnDisable()
@@ -104,8 +104,9 @@ public sealed class ImeCandidateScaling : ModuleBase
 
     public override bool DrawSettings()
     {
-        ImGui.TextWrapped("本地待验证版 0.2.0 · 目标 Omni 1.1.8.2");
+        ImGui.TextWrapped("Dalamud 插件候选栏缩放 · 预览");
         ImGui.TextWrapped(status + " · 绘制帧数：" + drawFrames);
+        ImGui.TextWrapped("仅作用于 Dalamud 插件 ImGui 输入框，不作用于游戏聊天框。");
         ImGui.Checkbox("显示候选栏预览", ref preview);
         var changed = false;
         ImGui.SetNextItemWidth(-1);
@@ -144,8 +145,8 @@ public sealed class ImeCandidateScaling : ModuleBase
         if (preview)
         {
             var pos = ImGui.GetCursorScreenPos() + new Vector2(12, 12);
-            DrawScaled(ImGui.GetWindowViewport(), pos, "ceshi",
-                new[] { ("测试", true), ("候选栏缩放", true), ("显示预览", true) },
+            DrawScaled(ImGui.GetWindowViewport(), pos, "Input",
+                new[] { ("Candidate one", true), ("Candidate two", true), ("Candidate three", true) },
                 3, 0, 0, 9, 0, 5, config.Scale);
             ImGui.Dummy(new Vector2(1, 200 * config.Scale));
         }
@@ -162,7 +163,7 @@ public sealed class ImeCandidateScaling : ModuleBase
                 || viewport.Equals(default(ImGuiViewportPtr)))
             {
                 hasCachedIme = false;
-                status = "等待 ImGui 输入焦点；当前没有关联视口";
+                status = "未接收到 Dalamud IME 视口；当前游戏输入不在此入口";
                 return;
             }
             cachedViewport = viewport;
@@ -272,6 +273,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         draw.PushClipRect(workMin, workMax, true);
         draw.AddRectFilled(topLeft, topLeft + size, bg, style.WindowRounding * scale);
         draw.AddRect(topLeft, topLeft + size, ImGui.GetColorU32(ImGuiCol.Border), style.WindowRounding * scale);
+        draw.PushClipRect(topLeft + padding, topLeft + size - padding, true);
 
         var cursor = topLeft + padding;
         if (!flippedUp && hasPartial(composition, partialFrom, partialTo))
@@ -284,7 +286,7 @@ public sealed class ImeCandidateScaling : ModuleBase
         {
             var label = $"{i + 1}. {candidates[i].Text}{(candidates[i].Supported ? string.Empty : " (x)")}";
             draw.AddText(font, fontSize, cursor, i == selection % pageSize ? selected : text, label,
-                maxTextWidth, Vector4.Zero);
+                maxTextWidth);
             cursor.Y += heights[i] + lineSpacing;
         }
 
@@ -292,12 +294,13 @@ public sealed class ImeCandidateScaling : ModuleBase
         {
             draw.AddLine(cursor, cursor + new Vector2(maxTextWidth, 0), ImGui.GetColorU32(ImGuiCol.Separator));
             cursor.Y += lineSpacing;
-            draw.AddText(font, fontSize, cursor, text, pageText, maxTextWidth, Vector4.Zero);
+            draw.AddText(font, fontSize, cursor, text, pageText, maxTextWidth);
             cursor.Y += pageHeight + lineSpacing;
         }
 
         if (flippedUp && hasPartial(composition, partialFrom, partialTo))
             DrawComposition(draw, font, fontSize, cursor, composition, partialFrom, partialTo, scale, text, maxTextWidth);
+        draw.PopClipRect();
         draw.PopClipRect();
     }
 
@@ -314,7 +317,7 @@ public sealed class ImeCandidateScaling : ModuleBase
             draw.AddRectFilled(position + new Vector2(start, 0), position + new Vector2(end, fontSize),
                 ImGui.GetColorU32(ImGuiCol.TextSelectedBg));
         }
-        draw.AddText(font, fontSize, position, textColor, text, wrapWidth, Vector4.Zero);
+        draw.AddText(font, fontSize, position, textColor, text, wrapWidth);
     }
 
     private static (string Text, bool Supported) ReadCandidate(object value)

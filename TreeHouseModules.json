@@ -43,13 +43,13 @@
     },
     {
       "InternalName": "ImeCandidateScaling",
-      "Name": "输入法候选栏缩放（测试）",
+      "Name": "Dalamud 插件候选栏缩放（测试）",
       "Author": "Yuzi",
-      "Description": "调整游戏内输入法候选栏的自绘显示倍率，沿用输入光标定位和屏幕边界处理。",
-      "Version": "0.2.0",
+      "Description": "调整 Dalamud 插件 ImGui 输入框候选栏的显示倍率。",
+      "Version": "0.3.0",
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/ImeCandidateScaling.cs",
-      "Sha256": "4F21FA2246A5EF8C2AC3CFA27107FEB9BAF8B114B50D56CCC9EB1CA826CDB671"
+      "Sha256": "3E3931E4E44322047FC8D948C3175DCDF8620761143C0E434FF08B0001DE7AC3"
     }
   ]
 }
