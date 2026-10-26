@@ -50,6 +50,16 @@
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/ImeCandidateScaling.cs",
       "Sha256": "EA2D48BC0AD5B7F4BB6B5D02149BA119CA1F72B8CDBEE06A46B1DC48D118C4C6"
+    },
+    {
+      "InternalName": "KeyRepeater",
+      "Name": "按键连点（测试）",
+      "Author": "Yuzi",
+      "Description": "按住配置的按键或快捷键组合时，持续发送对应输入。",
+      "Version": "0.1.0",
+      "MinimumOmniVersion": "1.1.8.2",
+      "File": "Modules/KeyRepeater.cs",
+      "Sha256": "228721EF9F0AE91EBD1BC4997274B51A543B4E9470647FFD73A39157562B324B"
     }
   ]
 }
