@@ -24,7 +24,7 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "极限技调整（测试）", Author = "Yuzi", Category = ModuleCategory.Item,
+        Title = "极限技调整", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "调整极限技条的旋转、间距和文本显示。"
     };
     public override bool HasSettings => true;
