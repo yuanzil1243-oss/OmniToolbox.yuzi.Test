@@ -1,4 +1,21 @@
 {
   "SchemaVersion": 1,
-  "Modules": []
+  "Modules": [
+    {
+      "InternalName": "AchievementTracker",
+      "Author": "Yuzi",
+      "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi.Test",
+      "Version": "0.5.15",
+      "ApiVersion": 1,
+      "MinimumOmniVersion": "1.1.8.2",
+      "File": "Modules/AchievementTracker.cs",
+      "Sha256": "E1927C500242058B6572535E0038B48D312DA3F417186AD951CDEC6D690DF9A9",
+      "Localization": {
+        "Source": {
+          "Title": "成就追踪",
+          "Description": "读取游戏原生成就进度并显示不限数量的目标。"
+        }
+      }
+    }
+  ]
 }

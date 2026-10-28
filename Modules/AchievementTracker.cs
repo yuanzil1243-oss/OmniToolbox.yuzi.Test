@@ -19,10 +19,13 @@ using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
+using OmniToolbox.UI;
+using TreeTools.Lifecycle;
 
 namespace OmniToolbox.AchievementTrackerOnline;
 
-public sealed unsafe class AchievementTracker : ModuleBase
+[ModuleApiVersion(1)]
+public sealed unsafe class AchievementTracker : OmniModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true, WriteIndented = true };
     // Offline region supplements use stable game IDs; localized names are resolved from TerritoryType.
@@ -68,13 +71,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private const string OmniOverlayCommand = "成就追踪悬浮窗";
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度，在悬浮窗中显示自定义目标；自动同步当前角色的原生目标列表，并分别保存每个角色的配置。",
+        Author = "Yuzi", Category = ModuleCategory.Item,
         Commands = new[]
         {
             new ModuleCommand("打开或关闭游戏内成就追踪悬浮窗", "/omni 成就追踪悬浮窗"),
         },
     };
+    public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
+    {
+        ["Title"] = "成就追踪", ["Description"] = "读取游戏原生成就进度，在悬浮窗中显示自定义目标。"
+    });
     public override bool HasSettings => true;
 
     public override bool TryHandleCommand(string command)
@@ -116,7 +122,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         SaveConfig();
     }
 
-    protected override void OnEnable()
+    protected override void OnStart(FeatureLifetime activation)
     {
         progressHook = DService.Instance().Hook.HookFromMemberFunction<ReceiveAchievementProgressDelegate>(
             typeof(FfxivAchievement.MemberFunctionPointers), "ReceiveAchievementProgress", ReceiveAchievementProgress);
@@ -129,7 +135,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         TryAttachOmniCommand();
     }
 
-    protected override void OnDisable()
+    protected override void OnStop()
     {
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
